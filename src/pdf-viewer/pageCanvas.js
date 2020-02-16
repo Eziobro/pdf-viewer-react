@@ -3,11 +3,15 @@ import { ENUM } from './utils'
 
 import './index.css'
 
+function createKey (docId, pageNum) {
+    return `${docId}_${pageNum}`
+}
+
 export default class PageCanvas extends Component {
     constructor (props) {
         super(props)
         const { pageProxy, scale } = props
-        const { docId, pageIndex } = pageProxy
+        const { docId, pageIndex, numPages } = pageProxy
         const { width, height } = pageProxy.getViewport({ scale })
         const top = (height + ENUM.marginTop) * pageIndex
         const left = (document.documentElement.clientWidth - width) / 2
@@ -17,7 +21,8 @@ export default class PageCanvas extends Component {
             top,
             left,
             width,
-            height
+            height,
+            pageTotal: numPages
         }
         this.prePageCanvas = null
         this.canvasRef = React.createRef()
@@ -77,8 +82,7 @@ export default class PageCanvas extends Component {
     }
 
     render () {
-        // const { pageWidth, pageHeight } = this.state
-        const { top, left, width, height } = this.state
+        const { top, left, width, height, docId, pageNum, pageTotal } = this.state
         const renderPageStyle = {
             top,
             left,
@@ -89,11 +93,17 @@ export default class PageCanvas extends Component {
         return (
           <div ref={this.renderPageRef} style={renderPageStyle}>
               <div style={{ display: this.prePageCanvas ? 'inherit' : 'none' }}>
-                  <canvas ref={this.canvasRef}/>
-                  {/*< div className='test'>TODO:</div>*/}
+                  <canvas className='pageCanvas' ref={this.canvasRef}/>
+                  {
+                      this.props.interiors.map((interior, index) => {
+                          return <this.props.interiorRender key={createKey(docId, index)} arg={interior} docId={docId}
+                                                            pageNum={pageNum}
+                                                            pageTotal={pageTotal}/>
+                      })
+                  }
               </div>
               <div className='loadingStyle'
-                   style={{ display: this.prePageCanvas ? 'none' : 'inherit' }}>加载中。。。。。。。。。。。。。。。。。。。
+                   style={{ display: this.prePageCanvas ? 'none' : 'inherit' }}>加载中............
               </div>
           </div>
         )
