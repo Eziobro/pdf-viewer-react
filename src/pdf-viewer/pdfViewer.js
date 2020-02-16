@@ -1,145 +1,99 @@
-import React, {Component} from "react";
-import pdfjsLib from 'pdfjs-dist/webpack';
-import {VerticalLayout} from './verticalLayout'
-import {PageRender} from './pageRender'
-import RenderPage from "./render-page";
-import {debounce, getKey} from './utils'
+import React, { Component } from 'react'
+import pdfjsLib from 'pdfjs-dist/webpack'
+import PageCanvas from './pageCanvas'
+import { debounce, ENUM } from './utils'
 
-import style from './index.less'
+import './index.css'
+
+function createKey (docId, pageNum) {
+    return `${docId}_${pageNum}`
+}
 
 export default class PDFViewer extends Component {
-    constructor(props) {
-        super(props);
-        this.pageRenders = []
-        this.layout = new VerticalLayout() // 页面布局算法
-        this.pageRect = [] // 页面信息
-        this.pageRenderMap = {}
-        this.showPageInfo = [] // 当前可见页面
-        this.docSize = {}
+    constructor (props) {
+        super(props)
+        this.pageRenders = []   // 存放每页pdf形成的canvas
+        this.pageRenderRef = React.createRef()  //渲染pdf的容器
         this.state = {
+            scale: (document.documentElement.clientWidth - ENUM.marginLeft * 2) / 1280,
+            pages: [],
+            docId: 1,
             documentSize: {
-                height: document.documentElement.clientHeight,
                 width: document.documentElement.clientWidth,
-            }
+                height: document.documentElement.clientHeight
+            },
+            scrollTop: 0
         }
-
-        this.init()
-        this.docContainRef = React.createRef()
-        this.scrollContainerRef = React.createRef()
     }
 
+    componentDidMount () {
+        this.init()
+        window.addEventListener('resize', this.onResizeChange)
+        this.pageRenderRef.current.scrollTop = 0
+    }
+
+    componentWillUnmount () {
+        window.removeEventListener('resize', this.onResizeChange)
+    }
+
+    // 监听浏览器变化
+    onResizeChange = (e) => {
+        const { clientHeight, clientWidth } = document.documentElement
+        this.setState({
+            documentSize: {
+                width: clientWidth,
+                height: clientHeight
+            }
+        })
+    }
+    // 初始化pdf
     init = async () => {
         console.time('pdf加载时间')
-        const pdf = await pdfjsLib.getDocument('https://ezio-1257652981.cos.ap-chengdu.myqcloud.com/doc/test.pdf')
-        console.timeEnd('pdf加载时间')
-        const {_pdfInfo: {numPages}} = pdf
-        this.numPages = numPages
-        let _pages = []
-        let _pageMap = {}
-        const firstPageRender = await pdf.getPage(1)
-        for (let _page = 1; _page <= numPages; _page++) {
-            const pageRenderObj = new PageRender(1, _page, firstPageRender, pdf, this)
-            _pages.push(pageRenderObj)
-            _pageMap[getKey(1, _page)] = pageRenderObj
+        let pages = []
+        const { docId } = this.state
+        const pdf = await pdfjsLib.getDocument({
+            url: 'http://118.24.181.207/test2.pdf',
+            // rangeChunkSize: 65536 * 16
+        })
+        const { numPages } = pdf
+        for (let currentPage = 1; currentPage <= numPages; currentPage++) {
+            const _page = await pdf.getPage(currentPage)
+            _page.docId = docId
+            pages.push(_page)
         }
-        this.pageRenders = _pages
-        this.pageRect = this.layout.computePageSize(_pages)
-        this.pageRenderMap = _pageMap
+        this.setState({
+            pages
+        })
+        console.timeEnd('pdf加载时间')
 
-        this.getDocSize();
-        this.renderDocSize();
-        this.computeCurrentShowPageInfos()
-        this.renderPage()
-        this.forceUpdate()
-    }
-
-    componentDidMount() {
-        window.addEventListener('scroll', this.scrollEvent, true)
-    }
-
-    componentDidUpdate(prevProps, prevState, snapshot) {
-    }
-
-    onPageRenderedSuccess() {
-        this.forceUpdate()
-    }
-
-    // 获得文档大小
-    getDocSize = () => {
-        console.info('getDocSize')
-        const pageRects = this.pageRect
-        this.docSize = this.layout.computeDocSize(pageRects)
-    }
-
-    // 重新渲染文档大小
-    renderDocSize = () => {
-        console.info('renderDocSize')
-        const el = this.docContainRef.current
-        if (!el) return
-        let docSize = this.docSize;
-        el.style.width = docSize.width + 'px';
-        el.style.height = docSize.height + 'px';
-    }
-
-    //计算当前可见页面
-    computeCurrentShowPageInfos() {
-        let scrollContainer = this.scrollContainerRef.current
-        if (!scrollContainer) return []
-        const pageRects = this.pageRect
-        const scrollContainerRect = scrollContainer.getBoundingClientRect()
-        const {documentSize: {height: viewHeight}} = this.state
-        const {top} = scrollContainerRect
-        const viewTop = Math.abs(top)
-        const showPagesSet = new Set()
-        pageRects.forEach((pageRect, i) => {
-            if (pageRect.top < viewTop + viewHeight &&
-                pageRect.top + pageRect.height > viewTop) {
-                if (pageRects[i - 1]) showPagesSet.add(pageRects[i - 1])
-                showPagesSet.add(pageRects[i])
-                if (pageRects[i + 1]) showPagesSet.add(pageRects[i + 1])
-            }
-        });
-        this.showPageInfo = [...showPagesSet]
-    }
-
-    renderPage = () => {
-        this.showPageInfo.forEach(page => {
-            const {docId, currentPage} = page
-            this.pageRenderMap[getKey(docId, currentPage)].render()
+        this.setState({
+            scrollTop: this.pageRenderRef.current.scrollTop
         })
     }
 
-    scrollEvent = () => {
-        console.info('scroll')
-        this.computeCurrentShowPageInfos()
-        this.renderPage()
+    onScroll = () => {
+        this.setState({
+            scrollTop: this.pageRenderRef.current.scrollTop
+        })
     }
 
-    render() {
-        console.info('render')
+    render () {
+        const { pages, scale, documentSize, scrollTop } = this.state
         return (
-            <div ref={this.scrollContainerRef} className='scrollViewerContainer'
-                 onScroll={this.scrollEvent}>
-                <div ref={this.docContainRef} className="documentContainer">
-                    {
-                        this.showPageInfo.map(rect => {
-                            const {docId, currentPage, top, left, width, height} = rect
-                            const renderPageStyle = {
-                                top,
-                                left,
-                                width,
-                                height
-                            }
-                            return (
-                                <div className={style.renderPage} style={renderPageStyle}
-                                     key={getKey(docId, currentPage)}>
-                                    <RenderPage pageRender={this.pageRenderMap[getKey(docId, currentPage)]}/>
-                                </div>
-                            )
-                        })
-                    }
-                </div>
-            </div>
+          <div ref={this.pageRenderRef} className='pdfFrame'
+               onScroll={debounce(this.onScroll, 1000 / 60, true)}
+               style={{ height: documentSize.height + 'px' }}>
+              {
+                  pages.map(_page =>
+                    <PageCanvas
+                      docId={_page.docId}
+                      pageNum={_page.pageIndex}
+                      key={createKey(_page.docId, _page.pageIndex)}
+                      scale={scale}
+                      pageProxy={_page} scrollTop={scrollTop || 0}
+                    />)
+              }
+          </div>
         )
     }
 }
