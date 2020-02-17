@@ -12,7 +12,8 @@ export default class PageCanvas extends Component {
         super(props)
         const { pageProxy, scale } = props
         const { docId, pageIndex, numPages } = pageProxy
-        const { width, height } = pageProxy.getViewport({ scale })
+        const ratio = window.devicePixelRatio
+        const { width, height } = pageProxy.getViewport({ scale: scale * ratio })
         const top = (height + ENUM.marginTop) * pageIndex
         const left = (document.documentElement.clientWidth - width) / 2
         this.state = {
@@ -22,7 +23,8 @@ export default class PageCanvas extends Component {
             left,
             width,
             height,
-            pageTotal: numPages
+            pageTotal: numPages,
+            ratio
         }
         this.prePageCanvas = null
         this.canvasRef = React.createRef()
@@ -32,12 +34,12 @@ export default class PageCanvas extends Component {
     componentDidMount () {
         const { scrollTop } = this.props
         const { clientWidth, clientHeight } = document.documentElement
-        const { top: offsetTop, height } = this.state
+        const { top: offsetTop, height, ratio } = this.state
         if (offsetTop > scrollTop - height && offsetTop < scrollTop + clientHeight + height) {
             const canvas = this.canvasRef.current
             const context = canvas.getContext('2d')
             const { pageProxy, scale } = this.props
-            const viewport = pageProxy.getViewport({ scale })
+            const viewport = pageProxy.getViewport({ scale: scale * ratio })
             canvas.width = viewport.width
             canvas.height = viewport.height
             const renderContext = {
@@ -64,10 +66,12 @@ export default class PageCanvas extends Component {
 
     componentDidUpdate (prevProps, prevState, snapshot) {
         if (!this.prePageCanvas) {
+            this.prePageCanvas = null
+            const ratio = window.devicePixelRatio
             const canvas = this.canvasRef.current
             const context = canvas.getContext('2d')
             const { pageProxy, scale } = this.props
-            const viewport = pageProxy.getViewport({ scale })
+            const viewport = pageProxy.getViewport({ scale: scale * ratio })
             canvas.width = viewport.width
             canvas.height = viewport.height
             const renderContext = {
@@ -91,20 +95,21 @@ export default class PageCanvas extends Component {
             position: 'absolute',
         }
         return (
-          <div ref={this.renderPageRef} style={renderPageStyle}>
-              <div style={{ display: this.prePageCanvas ? 'inherit' : 'none' }}>
-                  <canvas className='pageCanvas' ref={this.canvasRef}/>
-                  {
-                      this.props.interiors.map((interior, index) => {
-                          return <this.props.interiorRender key={createKey(docId, index)} arg={interior} docId={docId}
-                                                            pageNum={pageNum}
-                                                            pageTotal={pageTotal}/>
-                      })
-                  }
-              </div>
-              <div className='loadingStyle'
-                   style={{ display: this.prePageCanvas ? 'none' : 'inherit' }}>加载中............
-              </div>
+          <div ref={this.renderPageRef} style={renderPageStyle} className='renderPage'>
+              <canvas className='pageCanvas' ref={this.canvasRef}/>
+              {
+                  this.prePageCanvas ?
+                    this.props.interiors.map((interior, index) => {
+                        return <this.props.interiorRender
+                          key={createKey(docId, index)}
+                          arg={interior}
+                          docId={docId} pageNum={pageNum} pageTotal={pageTotal}
+                          docWidth={width} docHeight={height}
+                        />
+                    })
+                    : <div className='loadingStyle'>加载中............
+                    </div>
+              }
           </div>
         )
     }

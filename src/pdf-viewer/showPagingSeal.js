@@ -8,7 +8,6 @@ export default class PagingSeal extends Component {
     constructor (props) {
         super(props)
         this.canvasRef = React.createRef()
-        this.pagingSealRef = React.createRef()
         let position = {}
         switch (props.sealData.direction) {
             case DIRECTION.RIGHT:
@@ -35,69 +34,19 @@ export default class PagingSeal extends Component {
 
     componentDidMount () {
         this.drawImage()
-        this.pagingSealRef.current.addEventListener('mousedown', this.onMouseStart, { passive: false })
-    }
-
-    onMouseStart = (e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        const { sealData: { setOffset, height, width, direction }, pdfData: { docHeight, docWidth } } = this.props
-        const pagingSealRef = this.pagingSealRef.current
-        const startSealX = parseFloat(pagingSealRef.style.left)
-        const startSealY = parseFloat(pagingSealRef.style.top)
-        const startMouseX = e.pageX
-        const startMouseY = e.pageY
-
-        const onMouseMove = (e) => {
-            e.preventDefault()
-            const moveMouseX = e.pageX
-            const moveMouseY = e.pageY
-            let moveSealY = startSealY + moveMouseY - startMouseY
-            let moveSealX = startSealX + moveMouseX - startMouseX
-            if (direction === DIRECTION.RIGHT || direction === DIRECTION.LEFT) {
-                if (moveSealY < 0) moveSealY = 0
-                if (moveSealY > docHeight - height) moveSealY = docHeight - height
-                pagingSealRef.style.top = moveSealY + 'px'
-            } else if (direction === DIRECTION.TOP || direction === DIRECTION.BOTTOM) {
-                if (moveSealX < 0) moveSealX = 0
-                if (moveSealX > docWidth - width) moveSealX = docWidth - width
-                pagingSealRef.style.left = moveSealX + 'px'
-            }
-        }
-
-        const onMouseEnd = (e) => {
-            const { left, top } = pagingSealRef.style
-            const endSealX = parseFloat(left)
-            const endSealY = parseFloat(top)
-            const offset = endSealX - startSealX || endSealY - startSealY
-            this.setState({
-                position: {
-                    top: endSealY,
-                    left: endSealX
-                }
-            })
-            if (offset === 0) {
-                this.props.onChangePagingSealStatus(false)
-            } else {
-                this.props.onUpdateSeal(Object.assign(this.props.sealData, { offset }))
-            }
-            window.removeEventListener('mousemove', onMouseMove)
-            window.removeEventListener('mouseup', onMouseEnd)
-        }
-
-        window.addEventListener('mousemove', onMouseMove)
-        window.addEventListener('mouseup', onMouseEnd)
     }
 
     // shouldComponentUpdate (nextProps, nextState, nextContext) {
     //     return false
-    // }
+    // }s
 
     drawImage = () => {
         const { sealData, docId, pageNum, pageTotal } = this.props
         const { offset, width: sealDataWidth, height: sealDataHeight } = sealData
         const cutWidth = sealData.width / pageTotal
         const canvasRef = this.canvasRef.current
+
+        canvasRef.addEventListener('click', this.onClickCanvas, { passive: false })
 
         const ctx = canvasRef.getContext('2d')
 
@@ -120,11 +69,28 @@ export default class PagingSeal extends Component {
              */
             ctx.drawImage(
               img,
+              cutWidth * (pageTotal - pageNum - 1),
               0,
-              offset,
               sealDataWidth,
               sealDataHeight
             )
+        }
+
+        /**
+         * 对多余显示的骑缝章进行裁剪
+         */
+        ctx.rect(
+          cutWidth * (pageTotal - 1),
+          0,
+          sealData.width,
+          canvasRef.height
+        )
+        ctx.clip()
+    }
+
+    onClickCanvas = () => {
+        if (this.props.onChangePagingSealStatus) {
+            this.props.onChangePagingSealStatus(true)
         }
     }
 
@@ -136,8 +102,7 @@ export default class PagingSeal extends Component {
             ...position
         }
         return (
-          <div ref={this.pagingSealRef} className='pagingSeal' style={sealStyle}
-          >
+          <div className='pagingSeal' style={sealStyle}>
               <canvas ref={this.canvasRef} width={width} height={height}></canvas>
           </div>
         )

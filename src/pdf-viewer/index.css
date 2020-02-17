@@ -13,6 +13,11 @@
     overflow-y: auto;
 }
 
+/* 页面样式 */
+.renderPage {
+    box-shadow: 0 5px 15px -5px rgba(0, 0, 0, 0.5);
+}
+
 .pageCanvas {
     position: absolute;
 }

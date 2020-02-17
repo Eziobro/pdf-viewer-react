@@ -4,6 +4,7 @@ import PageCanvas from './pageCanvas'
 import { debounce, ENUM } from './utils'
 
 import { SealFactory, sealType } from './seal'
+import ShowPagingSeal from './showPagingSeal'
 import PagingSeal from './pagingSeal'
 
 import './index.css'
@@ -27,6 +28,7 @@ export default class PDFViewer extends Component {
             },
             scrollTop: 0,
             interiorsArg: [],
+            isEditPagingSeal: true
         }
     }
 
@@ -34,10 +36,7 @@ export default class PDFViewer extends Component {
         this.init()
         window.addEventListener('resize', this.onResizeChange)
         this.pageRenderRef.current.scrollTop = 0
-        const PagingSeal = SealFactory.createSeal(sealType.PAGING_SEAL)
-        this.setState({
-            interiorsArg: [PagingSeal]
-        })
+        this.onAppendSeal(sealType.PAGING_SEAL)
     }
 
     componentWillUnmount () {
@@ -89,9 +88,43 @@ export default class PDFViewer extends Component {
     }
 
     interiorRender = (params) => {
-        const { arg: sealData, docId, pageNum, pageTotal } = params
-        return <PagingSeal sealData={sealData} docId={docId} pageNum={pageNum} pageTotal={pageTotal}/>
+        const { isEditPagingSeal } = this.state
+        const { arg: sealData, docId, pageNum, pageTotal, docWidth, docHeight } = params
+        return isEditPagingSeal ?
+          <PagingSeal sealData={sealData} docId={docId} pageNum={pageNum} pageTotal={pageTotal}
+                      pdfData={{ docWidth, docHeight }}
+                      onChangePagingSealStatus={this.onChangePagingSealStatus}
+                      onUpdateSeal={this.onUpdateSeal}/> :
+          <ShowPagingSeal sealData={sealData} docId={docId} pageNum={pageNum} pageTotal={pageTotal}
+                          pdfData={{ docWidth, docHeight }}
+                          onChangePagingSealStatus={this.onChangePagingSealStatus}
+                          onUpdateSeal={this.onUpdateSeal}/>
     }
+
+    // =================外部可操作函数 START================
+    onChangePagingSealStatus = (status) => {
+        this.setState({
+            isEditPagingSeal: status
+        })
+    }
+
+    onAppendSeal = (type) => {
+        const PagingSeal = SealFactory.createSeal(type)
+        this.setState({
+            interiorsArg: [...this.state.interiorsArg, PagingSeal]
+        })
+    }
+
+    onUpdateSeal = (newSeal) => {
+        const { interiorsArg } = this.state
+        let seals = interiorsArg.filter(seal => seal.id !== newSeal.id)
+        seals.push(newSeal)
+        this.setState({
+            interiorsArg: seals
+        })
+    }
+
+    // =================外部可操作函数 END==================
 
     render () {
         const { pages, scale, documentSize, scrollTop, interiorsArg } = this.state

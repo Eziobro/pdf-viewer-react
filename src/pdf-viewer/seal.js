@@ -1,5 +1,6 @@
 class PagingSeal {
     constructor () {
+        this.id = Number(Math.random().toString().substr(3, 9) + Date.now()).toString(36)
         this.type = sealType.PAGING_SEAL
         this.width = 150
         this.height = 150
